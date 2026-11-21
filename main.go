@@ -15,6 +15,7 @@ type options struct {
 	tz     string
 	source string
 	yes    bool
+	edit   bool
 }
 
 var errGuard = errors.New("delete guard tripped")
@@ -29,6 +30,7 @@ func newFlagSet(name string, o *options) *flag.FlagSet {
 	fs.BoolVar(&o.dryRun, "dry-run", false, "print what would happen; change nothing")
 	if name != "sync" {
 		fs.StringVar(&o.tz, "tz", "", "IANA zone the iPod clock is set to (default: host zone)")
+		fs.BoolVar(&o.edit, "edit", false, "edit the play log in a TUI before submitting")
 	}
 	if name != "scrobble" {
 		fs.StringVar(&o.source, "source", "", "rsync source, e.g. homeserver:/srv/music (default: $TIDE_SOURCE)")

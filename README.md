@@ -20,6 +20,22 @@ tide sync       # mirror the music library onto the iPod
 
 Add `--dry-run` to see what would happen without changing anything.
 
+### Editing the play log
+
+```
+tide scrobble --edit   # review the log in a TUI before sending
+```
+
+The editor lists every play: listened tracks start included, skipped ones
+start excluded. Space toggles an entry, enter saves and sends, q cancels
+without changing anything. Saving rewrites the log to exactly the included
+entries, so excluded plays (including untouched skips) are deleted from it.
+With `--dry-run` nothing is written; the preview shows the post-edit listens.
+
+`m` cycles the display between raw fields, prettified untagged filenames, and
+a custom format template (`t` to edit it; placeholders like `{artist}`,
+`{title}`, `{time}`). Display modes never change what is written.
+
 ## Setup
 
 - `LISTENBRAINZ_TOKEN` — your ListenBrainz token (or `LISTENBRAINZ_TOKEN_FILE` pointing at a file with it)

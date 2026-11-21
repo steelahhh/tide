@@ -12,7 +12,7 @@
           pname = "tide";
           version = "0.1.0";
           src = ./.;
-          vendorHash = null; # no dependencies
+          vendorHash = "sha256-uwBJAqN4sIepiiJf9lCDumLqfKJEowQO2tOiSWD3Fig=";
           nativeBuildInputs = [ pkgs.makeWrapper ];
           # GNU rsync first on PATH; macOS's openrsync lacks needed flags.
           postInstall = ''

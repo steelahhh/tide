@@ -89,6 +89,18 @@ func TestParseLogNoTZHeader(t *testing.T) {
 	}
 }
 
+func TestParseLogSkippedBeforeClockUnset(t *testing.T) {
+	log := "Test Artist\tTest Album\tSkipped Unset\t1\t100\tS\t3600\n"
+	res, err := parseLog(strings.NewReader(log), time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Skipped != 1 || res.ClockUnset != 0 || len(res.Listens) != 0 {
+		t.Fatalf("S with unset clock: skipped %d, clockUnset %d, listens %d; want 1, 0, 0",
+			res.Skipped, res.ClockUnset, len(res.Listens))
+	}
+}
+
 func TestLocalToUTCSummer(t *testing.T) {
 	oslo, err := time.LoadLocation("Europe/Oslo")
 	if err != nil {
