@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-func defaultRoots() []string {
+var defaultRoots = func() []string {
 	user := os.Getenv("USER")
 	return []string{
 		"/Volumes/*",
@@ -48,6 +48,7 @@ func resolveDevice(flagValue string) (string, error) {
 		if err != nil || !info.IsDir() {
 			return "", fmt.Errorf("%s has no .rockbox folder; not a Rockbox device", flagValue)
 		}
+		rememberDevice(flagValue)
 		return flagValue, nil
 	}
 	devices, err := findDevices(defaultRoots())
@@ -56,8 +57,17 @@ func resolveDevice(flagValue string) (string, error) {
 	}
 	switch len(devices) {
 	case 0:
+		path, err := autoMount()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "tide: could not auto-mount: %v\n", err)
+		} else if path != "" {
+			fmt.Printf("tide: auto-mounted the device at %s\n", path)
+			rememberDevice(path)
+			return path, nil
+		}
 		return "", fmt.Errorf("no Rockbox device mounted; use --device")
 	case 1:
+		rememberDevice(devices[0])
 		return devices[0], nil
 	default:
 		return "", fmt.Errorf("several Rockbox devices found: %s; use --device", strings.Join(devices, ", "))

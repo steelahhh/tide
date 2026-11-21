@@ -36,6 +36,19 @@ With `--dry-run` nothing is written; the preview shows the post-edit listens.
 a custom format template (`t` to edit it; placeholders like `{artist}`,
 `{title}`, `{time}`). Display modes never change what is written.
 
+### Device memory and auto-mount (Linux)
+
+After a successful run tide remembers the iPod (filesystem UUID and mount
+point) in `$XDG_STATE_HOME/tide/device.json`. If a later run finds no Rockbox
+device mounted but the remembered one is plugged in, tide mounts it via
+udisks2 (`udisksctl`, no root needed) and continues. A device you mounted
+yourself always wins. If the remembered device is absent or cannot be
+mounted, tide prints a note and the usual no-device error.
+
+On the very first run, before anything is remembered: if exactly one
+unmounted USB partition is present, tide mounts it, keeps it if it carries
+`.rockbox`, and unmounts it again otherwise.
+
 ## Setup
 
 - `LISTENBRAINZ_TOKEN` — your ListenBrainz token (or `LISTENBRAINZ_TOKEN_FILE` pointing at a file with it)
