@@ -1,0 +1,9 @@
+# Go
+/tide
+*.test
+*.out
+
+# Nix
+/result
+/result-*
+.direnv/
