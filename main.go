@@ -2,10 +2,10 @@ package main
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"os"
-	"strings"
+
+	"github.com/spf13/cobra"
 	_ "time/tzdata"
 )
 
@@ -24,80 +24,119 @@ func main() {
 	os.Exit(run(os.Args[1:]))
 }
 
-func newFlagSet(name string, o *options) *flag.FlagSet {
-	fs := flag.NewFlagSet(name, flag.ContinueOnError)
-	fs.StringVar(&o.device, "device", "", "iPod mount point (default: auto-detect)")
-	fs.BoolVar(&o.dryRun, "dry-run", false, "print what would happen; change nothing")
-	if name != "sync" {
-		fs.StringVar(&o.tz, "tz", "", "IANA zone the iPod clock is set to (default: host zone)")
-		fs.BoolVar(&o.edit, "edit", false, "edit the play log in a TUI before submitting")
-	}
-	if name != "scrobble" {
-		fs.StringVar(&o.source, "source", "", "rsync source, e.g. homeserver:/srv/music (default: $TIDE_SOURCE)")
-		fs.BoolVar(&o.yes, "yes", false, "allow a delete that trips the delete guard")
-	}
-	return fs
-}
-
 func run(args []string) int {
-	name := "tide"
-	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
-		name, args = args[0], args[1:]
-		if name != "scrobble" && name != "sync" {
-			fmt.Fprintf(os.Stderr, "tide: unknown command %q\n", name)
-			return 1
-		}
+	root := newRootCmd()
+	root.SetArgs(args)
+	err := root.Execute()
+	if err == nil {
+		return 0
 	}
-	var o options
-	fs := newFlagSet(name, &o)
-	if err := fs.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			return 0
-		}
-		fmt.Fprintf(os.Stderr, "tide: %v\n", err)
-		return 1
+	code := 1
+	if errors.Is(err, errGuard) {
+		code = 2
 	}
-	if fs.NArg() > 0 {
-		fmt.Fprintf(os.Stderr, "tide: unexpected argument %q\n", fs.Arg(0))
-		return 1
+	errs := []error{err}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		errs = joined.Unwrap()
 	}
-	dev, err := resolveDevice(o.device)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "tide: %v\n", err)
-		return 1
-	}
-	fmt.Println("device:", dev)
-	switch name {
-	case "scrobble":
-		return report(runScrobble(dev, &o))
-	case "sync":
-		return report(runSync(dev, &o))
-	}
-	code := 0
-	if err := runScrobble(dev, &o); err != nil {
-		fmt.Fprintf(os.Stderr, "tide: %v\n", err)
-		code = 1
-	}
-	if err := runSync(dev, &o); err != nil {
-		if errors.Is(err, errGuard) {
-			code = 2
-		} else {
-			fmt.Fprintf(os.Stderr, "tide: %v\n", err)
-			if code == 0 {
-				code = 1
-			}
+	for _, e := range errs {
+		if !errors.Is(e, errGuard) {
+			fmt.Fprintf(os.Stderr, "tide: %v\n", e)
 		}
 	}
 	return code
 }
 
-func report(err error) int {
-	if err == nil {
-		return 0
+func newRootCmd() *cobra.Command {
+	var o options
+	root := &cobra.Command{
+		Use:   "tide",
+		Short: "Scrobble a Rockbox iPod to ListenBrainz and mirror the music library onto it",
+		Long: "tide scrobbles the Rockbox Last.fm log to ListenBrainz and mirrors the\n" +
+			"music library onto the iPod. With no subcommand it scrobbles first, then syncs.",
+		Example: "  tide                   scrobble, then sync\n" +
+			"  tide scrobble --edit   edit the play log before submitting\n" +
+			"  tide sync --dry-run    preview the mirror without changing anything",
+		SilenceErrors: true,
+		Args:          cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
+			dev, err := resolveDevice(o.device)
+			if err != nil {
+				return err
+			}
+			fmt.Println("device:", dev)
+			var errs []error
+			if err := runScrobble(dev, &o); err != nil {
+				errs = append(errs, err)
+			}
+			if err := runSync(dev, &o); err != nil {
+				errs = append(errs, err)
+			}
+			return errors.Join(errs...)
+		},
 	}
-	if errors.Is(err, errGuard) {
-		return 2
+	root.CompletionOptions.DisableDefaultCmd = true
+	addCommonFlags(root, &o)
+	addScrobbleFlags(root, &o)
+	addSyncFlags(root, &o)
+	root.AddCommand(newScrobbleCmd(), newSyncCmd())
+	return root
+}
+
+func newScrobbleCmd() *cobra.Command {
+	var o options
+	cmd := &cobra.Command{
+		Use:   "scrobble",
+		Short: "Submit the iPod play log to ListenBrainz",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
+			dev, err := resolveDevice(o.device)
+			if err != nil {
+				return err
+			}
+			fmt.Println("device:", dev)
+			return runScrobble(dev, &o)
+		},
 	}
-	fmt.Fprintf(os.Stderr, "tide: %v\n", err)
-	return 1
+	addCommonFlags(cmd, &o)
+	addScrobbleFlags(cmd, &o)
+	return cmd
+}
+
+func newSyncCmd() *cobra.Command {
+	var o options
+	cmd := &cobra.Command{
+		Use:   "sync",
+		Short: "Mirror the music library and playlists onto the iPod",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
+			dev, err := resolveDevice(o.device)
+			if err != nil {
+				return err
+			}
+			fmt.Println("device:", dev)
+			return runSync(dev, &o)
+		},
+	}
+	addCommonFlags(cmd, &o)
+	addSyncFlags(cmd, &o)
+	return cmd
+}
+
+func addCommonFlags(cmd *cobra.Command, o *options) {
+	cmd.Flags().StringVar(&o.device, "device", "", "iPod mount point (default: auto-detect)")
+	cmd.Flags().BoolVar(&o.dryRun, "dry-run", false, "print what would happen; change nothing")
+}
+
+func addScrobbleFlags(cmd *cobra.Command, o *options) {
+	cmd.Flags().StringVar(&o.tz, "tz", "", "IANA zone the iPod clock is set to (default: host zone)")
+	cmd.Flags().BoolVar(&o.edit, "edit", false, "edit the play log in a TUI before submitting")
+}
+
+func addSyncFlags(cmd *cobra.Command, o *options) {
+	cmd.Flags().StringVar(&o.source, "source", "", "rsync source, e.g. homeserver:/srv/music (default: $TIDE_SOURCE)")
+	cmd.Flags().BoolVar(&o.yes, "yes", false, "allow a delete that trips the delete guard")
 }
