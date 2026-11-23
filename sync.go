@@ -42,16 +42,20 @@ func rsyncArgs(src, dst string, dryRun bool) []string {
 	return append(args, src, dst)
 }
 
-func countChanges(itemize string) (copies, deletes int) {
+// fileChanges keeps rsync's itemized lines for file copies and deletes, dropping directory noise.
+func fileChanges(itemize string) (lines []string, copies, deletes int) {
 	for _, line := range strings.Split(itemize, "\n") {
 		switch {
 		case strings.HasPrefix(line, "*deleting"):
 			deletes++
 		case strings.HasPrefix(line, ">f"):
 			copies++
+		default:
+			continue
 		}
+		lines = append(lines, line)
 	}
-	return copies, deletes
+	return lines, copies, deletes
 }
 
 func countFiles(dir string) (int, error) {
@@ -98,7 +102,10 @@ func runSync(device string, o *options) error {
 	if err := dry.Run(); err != nil {
 		return fmt.Errorf("rsync dry run: %w: %s", err, strings.TrimSpace(stderr.String()))
 	}
-	copies, deletes := countChanges(stdout.String())
+	lines, copies, deletes := fileChanges(stdout.String())
+	for _, line := range lines {
+		fmt.Println(line)
+	}
 	total, err := countFiles(dst)
 	if err != nil {
 		return err

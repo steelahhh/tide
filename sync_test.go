@@ -33,11 +33,15 @@ func TestRsyncArgsReal(t *testing.T) {
 	}
 }
 
-func TestCountChanges(t *testing.T) {
+func TestFileChanges(t *testing.T) {
 	itemize := ">f+++++++++ a/1.flac\n>f.st...... a/2.flac\n*deleting   b/3.flac\ncd+++++++++ c/\n"
-	copies, deletes := countChanges(itemize)
+	lines, copies, deletes := fileChanges(itemize)
 	if copies != 2 || deletes != 1 {
-		t.Fatalf("countChanges = %d copies, %d deletes; want 2, 1", copies, deletes)
+		t.Fatalf("fileChanges = %d copies, %d deletes; want 2, 1", copies, deletes)
+	}
+	want := []string{">f+++++++++ a/1.flac", ">f.st...... a/2.flac", "*deleting   b/3.flac"}
+	if !reflect.DeepEqual(lines, want) {
+		t.Fatalf("fileChanges lines = %q, want %q", lines, want)
 	}
 }
 
